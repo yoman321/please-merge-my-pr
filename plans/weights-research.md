@@ -17,7 +17,7 @@ off. `queue-skeleton` phase 3 and the onboarding presets are built from it.
 
 ## Out of scope
 
-- Writing `src/scoring.py` (that is `queue-skeleton`)
+- Writing `src/please_merge_my_pr/scoring.py` (that is `queue-skeleton`)
 - Real replay numbers (that is `replay-harness`; this plan only says how
   replay will be used to tune)
 - Any model: the score never uses one
@@ -36,6 +36,9 @@ What the research must respect. A proposal that breaks one is rejected.
 - **W5 — Tunable by users.** Whatever formula wins, a user can change it
   through plain numbers in config. No hidden constants outside config.
 - **W6 — Held-out stays held out.** Tuning uses only the 2 tuning repos.
+- **W7 — Weights come from the user.** Weights load only from the user's
+  config, or from a team file read from the repo's default branch. Never from
+  a PR's branch: a PR that edits the weights file must not rank itself.
 
 ## Questions to answer
 

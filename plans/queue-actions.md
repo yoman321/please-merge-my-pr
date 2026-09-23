@@ -4,7 +4,7 @@ Phases: 4
 
 # Queue actions
 
-`PLAN.md` 3.1. Plan 3 of 4 in the no-LLM scaffold.
+`PLAN.md` 3.1. Step 6 of the build order (see `plans/queue-skeleton.md`).
 Requires `queue-skeleton` built.
 
 ## Goal
@@ -46,21 +46,21 @@ tier. Nothing outbound happens without the user asking for it.
 
 ## Phases
 
-### 1. Tier registry — `src/actions.py`
+### 1. Tier registry — `src/please_merge_my_pr/actions.py`
 
 - `@action(tier=...)` decorator, registry, dispatcher that enforces A1–A3.
 
-### 2. GitHub write client — `src/github/write.py`
+### 2. GitHub write client — `src/please_merge_my_pr/github/write.py`
 
 - `add_label`, `remove_label`, `merge(method)`, `comment(text)`,
   `approve`. Base URL from config only (A4). Honors `--dry-run` (A6).
 
-### 3. Rule store — `src/rules.py`
+### 3. Rule store — `src/please_merge_my_pr/rules.py`
 
 - SQLite `rules(action, repo, label, created_at)`. `please-merge-my-pr rules` lists them,
   `please-merge-my-pr rules rm <id>` deletes one.
 
-### 4. CLI — `src/cli.py`
+### 4. CLI — `src/please_merge_my_pr/cli.py`
 
 - `please-merge-my-pr label <n> <label>`, `please-merge-my-pr merge <n> [--squash|--rebase]`,
   `please-merge-my-pr comment <n>` (opens `$EDITOR`), `please-merge-my-pr approve <n>`,

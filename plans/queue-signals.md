@@ -4,7 +4,7 @@ Phases: 4
 
 # Queue signals
 
-`PLAN.md` 2.1 and 3.4. Plan 2 of 4 in the no-LLM scaffold.
+`PLAN.md` 2.1 and 3.4. Step 5 of the build order (see `plans/queue-skeleton.md`).
 Requires `queue-skeleton` built: `Event`, the signal interface, the scorer.
 
 ## Goal
@@ -47,13 +47,13 @@ teaches the tool whose "urgent" means something.
 
 ## Phases
 
-### 1. `due_soon` — `src/signals/due_soon.py`
+### 1. `due_soon` — `src/please_merge_my_pr/signals/due_soon.py`
 
 - Reads `milestone.due_on`. No milestone → `(0, "")`. Past due → 1.
 - Else `1 - min(1, days_left / horizon_days)`. `horizon_days` in config.
 - Fragment: `due in 2d` or `overdue 3d`.
 
-### 2. `blocked_people` — `src/signals/blocked_people.py`, `src/github/graphql.py`
+### 2. `blocked_people` — `src/please_merge_my_pr/signals/blocked_people.py`, `src/please_merge_my_pr/github/graphql.py`
 
 - One GraphQL query per PR for issue dependencies and stacked PRs.
 - Distinct people = assignees + authors of the blocked items, minus the PR
@@ -61,12 +61,12 @@ teaches the tool whose "urgent" means something.
 - `value = min(1, count / cap)`. Fragment: `blocks 2`.
 - TTL cache in SQLite, keyed by repo + PR number. Stores the count only.
 
-### 3. Credibility store — `src/credibility.py`
+### 3. Credibility store — `src/please_merge_my_pr/credibility.py`
 
 - SQLite table `credibility(author, flagged, confirmed, updated_at)`.
 - `get(author) -> float`, `record(author, confirmed: bool)`.
 
-### 4. `urgency` signal and the prompt — `src/signals/urgency.py`, `src/cli.py`
+### 4. `urgency` signal and the prompt — `src/please_merge_my_pr/signals/urgency.py`, `src/please_merge_my_pr/cli.py`
 
 - Label names and trust tiers (`lead`, `teammate`, `self`) come from config.
 - Applier found through the timeline API.
@@ -96,13 +96,14 @@ teaches the tool whose "urgent" means something.
 
 - Trust tiers are set per login in config. No org-role lookup.
 - `blocked_people` cap is 3; `due_soon` horizon is 14 days.
-- Weights stay as in `mock/queue_mock.py` until question 1 is answered.
+- Weights, caps, and horizons come from `research/weights.md`. The numbers
+  above are placeholders until then.
 
 ## Open questions
 
 1. Should "blocks 2 people" outrank "due in 2d + lead says urgent"? In the
    mock, #388 (due + urgent) beats #412 (blocks 2 + auth). The demo story
-   wants #412 on top. This sets the weights.
+   wants #412 on top. Moved to `weights-research` (questions 1 and 2 there).
 2. GitHub's "closing issues" links usually come from words in the PR body
    ("Fixes #12"). That is author text. Count it or not? S2 says no as written.
 3. Are GitHub issue dependencies available on the demo repos' plan? If not,

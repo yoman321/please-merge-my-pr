@@ -4,7 +4,7 @@ Phases: 4
 
 # Replay harness
 
-`PLAN.md` 2.3. Plan 4 of 4 in the no-LLM scaffold.
+`PLAN.md` 2.3. Step 7 of the build order (see `plans/queue-skeleton.md`).
 Requires `queue-skeleton` built (`Event.from_gh_archive`, the scorer) and
 `queue-signals` built.
 

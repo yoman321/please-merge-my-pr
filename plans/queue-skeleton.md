@@ -10,14 +10,16 @@ Build order:
 1. `weights-research` — decide the formula and default weights (no code)
 2. `cli-design` — decide the look of every screen, in `mock/` (no code)
 3. `queue-skeleton` (this) — data in, rank, print
-4. `queue-signals` — blocked_people, due_soon, urgency + credibility
-5. `queue-actions` — action tiers, label, merge, comment
-6. `replay-harness` — GH Archive replay, policies, leakage guard
+4. `onboarding` — `init`, config file, weight presets with live preview
+5. `queue-signals` — blocked_people, due_soon, urgency + credibility
+6. `queue-actions` — action tiers, label, merge, comment
+7. `replay-harness` — GH Archive replay, policies, leakage guard
+8. `summaries` — the only model code
 
 Phase 3 (scorer) follows `research/weights.md`. Phase 5 (screens) follows
 `design/cli.md`.
 
-The summary step is the only model code. It lands after all four.
+The summary step is the only model code. It lands last.
 
 ## Goal
 
@@ -36,8 +38,9 @@ Handled by later plans. Do not build them here.
 - `blocked_people`, `due_soon`, `urgency_claim`, credibility → `plans/queue-signals.md`
 - Actions: label, merge, comment → `plans/queue-actions.md`
 - Replay beyond one fixture → `plans/replay-harness.md`
-- Real summaries, Token Factory, LangSmith, `please-merge-my-pr egress` → later plan
-  (this plan only builds the empty slot the summary will fill)
+- Real summaries, Token Factory, LangSmith, `please-merge-my-pr egress` →
+  `plans/summaries.md` (this plan only builds the empty slot)
+- `init`, `config`, config validation → `plans/onboarding.md`
 
 ## Invariants
 
@@ -73,7 +76,7 @@ Stated as absolutes. Every one gets at least one gate.
 
 ## Phases
 
-### 1. Event model — `src/events.py`
+### 1. Event model — `src/please_merge_my_pr/events.py`
 
 - Frozen dataclass `Event`: `repo`, `number`, `author`, `author_association`,
   `title`, `body`, `labels`, `changed_files`, `additions`, `deletions`,
@@ -90,7 +93,7 @@ changed-file list). Check the real fixture before writing the constructor. If
 a field cannot be filled from both sources, that is a product decision (see
 Open questions), not a workaround.
 
-### 2. Cheap signals — `src/signals/`
+### 2. Cheap signals — `src/please_merge_my_pr/signals/`
 
 One module per signal. Each exports `extract(event, config, now) -> (float, str)`.
 
@@ -103,16 +106,21 @@ One module per signal. Each exports `extract(event, config, now) -> (float, str)
 
 A signal with value 0 returns an empty fragment.
 
-### 3. Scorer — `src/scoring.py`, `config/weights.yaml`
+### 3. Scorer — `src/please_merge_my_pr/scoring.py`
+
+- Until `onboarding` exists, weights load from `config/weights.yaml` in the
+  repo. `onboarding` replaces this with the user config file.
 
 - `score(event, weights, config, now) -> Scored(score, reason)`.
-- `score = round(100 * sum(w_i * v_i) / sum(w_i))`. Range 0–100.
+- Formula, curves, caps, and default weights come from `research/weights.md`
+  (the `weights-research` decision). Until it exists, the placeholder is
+  `score = round(100 * sum(w_i * v_i) / sum(w_i))`, range 0–100.
 - `reason` = the 3 non-empty fragments with the most points, joined with
   ` · `. Ties in points break by fixed signal order.
 - Ranking helper sorts by score descending, then tie rule (I8).
 - Loads nothing itself. The caller loads YAML and passes it in (keeps I2).
 
-### 4. Polling ingestion — `src/ingest/poll.py`
+### 4. Polling ingestion — `src/please_merge_my_pr/ingest/poll.py`
 
 - Polls `GET /notifications` on an interval.
 - Sends `If-Modified-Since` / `If-None-Match`. Obeys `X-Poll-Interval`.
@@ -122,16 +130,22 @@ A signal with value 0 returns an empty fragment.
 - CLI: `please-merge-my-pr watch` prints one line per new event.
 - Tests use a fake HTTP layer. No real network in tests.
 
-### 5. `please-merge-my-pr list` — `src/cli.py`
+### 5. `please-merge-my-pr list` — `src/please_merge_my_pr/cli.py`
 
-Screens follow `mock/queue_mock.py`. Look there for layout.
+Screens follow `design/cli.md` (from `cli-design`). Until it exists, look
+at `mock/queue_mock.py`.
+
+- All color and layout live in `src/please_merge_my_pr/ui/` (`theme.py` +
+  one render function per screen). Logic modules return plain data and never
+  format output. Plain text when not a terminal or when `NO_COLOR` is set.
+- `list` and `why` take `--json`.
 
 - `please-merge-my-pr list` — fetches open PRs for repos in config, builds `Event`s,
   scores, prints top N. Format: `#<number> <reason>   [score <n>]`.
   `--limit N` (default 3), `--all`. Drafts hidden, count shown.
 - `please-merge-my-pr why <n>` — table of every signal: value, weight, points, fragment.
 - `please-merge-my-pr show <n>` — header, reason line, then the summary slot.
-- Summary slot: `src/summary.py` defines a `Summarizer` protocol,
+- Summary slot: `src/please_merge_my_pr/summary.py` defines a `Summarizer` protocol,
   `summarize(event, diff) -> Summary | None`, and `NullSummarizer`, which
   always returns `None`. `show` prints `summary: not enabled` for `None`.
   No model client exists yet (I9).
@@ -158,7 +172,7 @@ For the Write-the-gates role. Each maps to an invariant.
   sent before 60 s of fake time (I7)
 - `test_304_emits_nothing` — fake server returns 304; zero events (I7)
 - `test_tie_order` — equal scores print in the tie-rule order, every run (I8)
-- `test_no_llm_imports` — no module under `src/` imports `openai`,
+- `test_no_llm_imports` — no module under `src/please_merge_my_pr/` imports `openai`,
   `anthropic`, or `langsmith` (I9)
 - `test_why_adds_up` — the points in `please-merge-my-pr why` sum to the score in
   `please-merge-my-pr list`, within rounding (I2)
@@ -173,6 +187,9 @@ Stated so work can go on. The Grade role or a human may overturn them.
 - Tie rule: older `created_at` first, then lower PR number.
 - `please-merge-my-pr list` fetches live from GitHub each run. It reads no stored PR data.
 - `age` cap is 14 days; `diff_size` cap is 500 lines. Both live in config.
+  Placeholders: `research/weights.md` overrides them.
+- Package layout: `src/please_merge_my_pr/`, with `pyproject.toml` exposing
+  the console command `please-merge-my-pr`. Built with `uv`.
 
 ## Open questions
 

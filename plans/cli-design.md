@@ -19,7 +19,7 @@ spec.
 ## Out of scope
 
 - Real GitHub data, real scoring, real config (mock data only)
-- The `ui/` layer in `src/` (built in `queue-skeleton` phase 5 from this spec)
+- The `ui/` layer in `src/please_merge_my_pr/` (built in `queue-skeleton` phase 5 from this spec)
 
 ## Invariants
 

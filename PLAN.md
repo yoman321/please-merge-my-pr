@@ -7,6 +7,18 @@ Personal deadline: **Tue Oct 28** (buffer for Devpost/YouTube problems)
 How to use this file: run Prompt 0 once, review what it writes, then work top to
 bottom. One prompt per session. Each ends in something runnable.
 
+Detailed specs live in `plans/`. Build order:
+1. `weights-research` — decide the formula and default weights (no code)
+2. `cli-design` — decide the look of every screen, in `mock/` (no code)
+3. `queue-skeleton` — data in, rank, print
+4. `onboarding` — `init`, config file, weight presets with live preview
+5. `queue-signals` — blocked_people, due_soon, urgency + credibility
+6. `queue-actions` — action tiers, label, merge, comment
+7. `replay-harness` — GH Archive replay, policies, leakage guard
+8. `summaries` — the only model code
+
+Background research: `research/landscape.md`. Current state: `handoff.md`.
+
 ---
 
 ## Positioning
@@ -111,7 +123,7 @@ the commit convention, and "run tests before claiming done."
 ### 1.1 Event model
 
 ```
-Implement the normalized event model in src/events.py: a dataclass covering
+Implement the normalized event model in src/please_merge_my_pr/events.py: a dataclass covering
 repo, PR number, author, author_association, title, body, labels, changed
 files, additions/deletions, base/head refs, milestone, created_at, updated_at,
 draft. Add a from_github_api() and a from_gh_archive() constructor so both
@@ -122,7 +134,7 @@ Archive fixture, both checked into /tests/fixtures.
 ### 1.2 Ingestion by polling
 
 ```
-Add src/ingest/poll.py: polls GitHub's notifications API on an interval,
+Add src/please_merge_my_pr/ingest/poll.py: polls GitHub's notifications API on an interval,
 respects X-Poll-Interval, uses conditional requests (If-Modified-Since/ETag)
 so unchanged responses don't count against rate limit. Emits normalized events.
 Store the last-seen cursor in SQLite. CLI: `please-merge-my-pr watch`.
@@ -131,7 +143,7 @@ Store the last-seen cursor in SQLite. CLI: `please-merge-my-pr watch`.
 ### 1.3 Cheap signals
 
 ```
-Implement the signal extractors in src/signals/, one module per signal, each
+Implement the signal extractors in src/please_merge_my_pr/signals/, one module per signal, each
 returning a float 0-1 plus a reason fragment string. Start with author_role,
 diff_size, risk_paths, age. No model calls. Tests: table-driven with
 hand-written event fixtures covering boundary cases.
@@ -140,7 +152,7 @@ hand-written event fixtures covering boundary cases.
 ### 1.4 Scorer and the three-line output
 
 ```
-Implement src/scoring.py: loads weights from config/weights.yaml, computes the
+Implement src/please_merge_my_pr/scoring.py: loads weights from config/weights.yaml, computes the
 weighted sum, returns score plus an assembled reason line. Pure function, fully
 deterministic, no I/O. Then `please-merge-my-pr list` printing the top N as one line each:
 "#412 blocks 2 · touches auth/ · 11d old   [score 45]".
@@ -164,7 +176,7 @@ free text by the PR author. Cache per PR with a short TTL.
 ### 2.2 Summarization (first Token Factory call in the app)
 
 ```
-Add src/summarize.py: calls the configured model (default Nemotron on Token
+Add src/please_merge_my_pr/summarize.py: calls the configured model (default Nemotron on Token
 Factory) through one OpenAI-compatible client. Two outputs per PR:
 (1) a summary from the DIFF ONLY, (2) a summary from diff + description.
 Both returned as typed JSON with a strict schema; reject and retry once on
@@ -200,7 +212,7 @@ read.
 ### 3.1 Action tiers
 
 ```
-Implement the action tier system in src/actions.py. Every action declares a
+Implement the action tier system in src/please_merge_my_pr/actions.py. Every action declares a
 tier. Tier 2 requires a stored rule approval; tier 3 always prompts. Merge and
 comment are tier 3. Destinations are read from config only; add a test proving
 a URL in a PR body can never become a request target.
