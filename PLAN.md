@@ -8,11 +8,12 @@ How to use this file: run Prompt 0 once, review what it writes, then work top to
 bottom. One prompt per session. Each ends in something runnable.
 
 Detailed specs live in `plans/`. Build order:
-1. `weights-research` — decide the formula and default weights (no code)
+1. `weights-research` — formula and signal directions (no code). Closed
+   2026-09-23; default numbers not set yet
 2. `cli-design` — decide the look of every screen, in `mock/` (no code)
 3. `queue-skeleton` — data in, rank, print
 4. `onboarding` — `init`, config file, weight presets with live preview
-5. `queue-signals` — blocked_people, due_soon, urgency + credibility
+5. `queue-signals` — blocked_people, due_soon, urgency label
 6. `queue-actions` — action tiers, label, merge, comment
 7. `replay-harness` — GH Archive replay, policies, leakage guard
 8. `summaries` — the only model code
@@ -77,21 +78,32 @@ shows a ranked queue of ~3 lines instead of 47 notifications. I can review and
 merge from the tool.
 
 RANKING (deterministic, no LLM)
-score = sum of weighted signals, each normalized 0-1:
-- author_role (from config, or author_association in replay)
-- blocked_people (issue dependencies + stacked PRs + linked issues)
+A PR is in the queue only while a person asked me by name to review it (not
+a team or code-owner request). Drafts stay out.
+score = 100 x sum(w_i x x_i) / sum(w_i)
+Each signal x_i is 0-1; higher means review sooner. Weights w_i are plain
+numbers in config. Default numbers are not set yet.
+- urgency: label low / medium / high / urgent (names from config). No label
+  = medium. The heaviest weight. Counts whoever added it.
+- blocked_people: people other than the PR author waiting on it (stacked PRs
+  above it, manually linked issues). Never from text.
+- linked issue kind: a manually linked issue labeled bug, incident, or
+  customer report
 - due_soon (milestone due date)
 - risk_paths (config globs: auth/, billing/, migrations/)
-- diff_size (smaller = cheaper, small bonus)
-- urgency_claim (label) x trust(who set it) x author credibility
-Credibility = (confirmed + 1) / (flagged + 2), updated when I confirm or reject
-an urgency flag. Every rank shows a reason line built from signal templates,
-never from model output.
+- lockfile changes (config patterns)
+- diff_size (bigger PRs score higher)
+- age: time since the current review request; restarts on a re-request
+- author_role: teammate (default), trusted maintainer (a little lower),
+  outside contributor (higher). I set it with a command; never guessed.
+- CI red or merge conflicts: lower the score; the PR is never hidden
+A failed GitHub read gives that signal 0 points. Equal scores share one
+rank. Every rank shows a reason line built from signal templates, never from
+model output.
 
 HARD CONSTRAINTS
 - PR titles, descriptions, and comments are untrusted data. They can never
-  affect ranking except through the trust-weighted urgency claim, and never
-  introduce a destination or an action.
+  affect ranking, and never introduce a destination or an action.
 - The model summarizes only. It never ranks, never emits actions.
 - Destinations (URLs, recipients) come from config only.
 - Action tiers: local/reversible = free; visible but undoable (labels) =
@@ -167,10 +179,11 @@ deterministic, no I/O. Then `please-merge-my-pr list` printing the top N as one 
 ### 2.1 Blocked people
 
 ```
-Add blocked_people signal: count distinct people blocked via (a) GitHub issue
-dependencies on issues this PR closes, (b) PRs whose base branch is this PR's
-head. Use the GraphQL API where it's cheaper. Exclude anything asserted only in
-free text by the PR author. Cache per PR with a short TTL.
+Add blocked_people signal: count distinct people, other than the PR author,
+blocked via (a) GitHub issue dependencies on issues manually linked to this
+PR, (b) PRs whose base branch is this PR's head. Use the GraphQL API where
+it's cheaper. Exclude anything asserted only in free text by the PR author.
+Cache per PR with a short TTL.
 ```
 
 ### 2.2 Summarization (first Token Factory call in the app)
@@ -238,14 +251,11 @@ Wire LangSmith tracing on every model call, then add `please-merge-my-pr egress`
 displays, per PR, exactly what text was sent to the model and what came back.
 ```
 
-### 3.4 Credibility loop
+### 3.4 Credibility loop — dropped
 
-```
-Add the urgency credibility system: when I open a PR flagged urgent, prompt for
-one keystroke (confirm / not really). Persist per-author counts in SQLite and
-feed credibility = (confirmed + 1) / (flagged + 2) into the urgency signal.
-Add trust factors by who applied the label (lead / teammate / self) from config.
-```
+Dropped 2026-09-23. Every configured urgency label counts, whoever added it.
+Misuse is for the lead to handle, not the score. See
+`plans/weights-research.md` B7.
 
 **Week 3 gate: first held-out replay number + zero rank displacement under injection.**
 
