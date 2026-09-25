@@ -1,0 +1,53 @@
+{
+  "actor": {
+    "avatar_url": "https://avatars.githubusercontent.com/u/105994585?",
+    "display_login": "p-linnane",
+    "gravatar_id": "",
+    "id": 105994585,
+    "login": "p-linnane",
+    "url": "https://api.github.com/users/p-linnane"
+  },
+  "created_at": "2026-09-24T23:00:06Z",
+  "id": "15711722473",
+  "org": {
+    "avatar_url": "https://avatars.githubusercontent.com/u/1503512?",
+    "gravatar_id": "",
+    "id": 1503512,
+    "login": "Homebrew",
+    "url": "https://api.github.com/orgs/Homebrew"
+  },
+  "payload": {
+    "action": "opened",
+    "number": 609,
+    "pull_request": {
+      "base": {
+        "ref": "main",
+        "repo": {
+          "id": 1283380355,
+          "name": "advisory-database",
+          "url": "https://api.github.com/repos/Homebrew/advisory-database"
+        },
+        "sha": "e5421161345b23ac092485c3bff8174025ecde46"
+      },
+      "head": {
+        "ref": "fix/poetry-virtualenv-boundary",
+        "repo": {
+          "id": 1283380355,
+          "name": "advisory-database",
+          "url": "https://api.github.com/repos/Homebrew/advisory-database"
+        },
+        "sha": "893f9f1c47833066456f29768b8ebf4363454b84"
+      },
+      "id": 4631982089,
+      "number": 609,
+      "url": "https://api.github.com/repos/Homebrew/advisory-database/pulls/609"
+    }
+  },
+  "public": true,
+  "repo": {
+    "id": 1283380355,
+    "name": "Homebrew/advisory-database",
+    "url": "https://api.github.com/repos/Homebrew/advisory-database"
+  },
+  "type": "PullRequestEvent"
+}

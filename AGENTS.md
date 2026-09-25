@@ -128,9 +128,18 @@ Finding — one per line, both review sections:
   [state] [severity] — [file:line] — [why it breaks] — [smallest fix]
 ```
 ```
-state:     [open] → [accepted] | [rejected]. ONLY A HUMAN CHANGES STATE.
+state:     [open] → [accepted] | [rejected]. ONLY A HUMAN DECIDES STATE.
+           An agent may write the change only when the human's prompt names the finding
+           (file:line) and the new state. Any role may make that one edit.
 severity:  high = breaks an invariant | med = breaks under a stated condition | low = cost, clarity, drift
-forbidden: praise, summary of the artifact, changing a finding's state, resolving your own
+forbidden: praise, summary of the artifact, changing a finding's state without the human's named instruction, resolving your own
+```
+State change on instruction:
+```
+Change only the [state] token. Leave the rest of the line as is.
+Change only the findings the prompt names. Never "all", never by pattern.
+Prompt unclear on which finding or which state → STOP, ask.
+Log each change in handoff.md under State: <file:line> [open] → [new], per human instruction.
 ```
 The Grade role may fix defects directly in the plan body. Its review section lists only issues that remain unresolved.
 
@@ -152,13 +161,14 @@ Verified: <commands run> → <results>
 ## 5. Commands
 
 ```bash
-<setup>
-<test-fast>
-<test-full>
-<test-single>
-<typecheck>
-<lint>
-<build>
+
+  <setup>        uv sync
+  <test-fast>    uv run pytest -q -x
+  <test-full>    uv run pytest -q
+  <test-single>  uv run pytest -q <path>::<test>
+  <typecheck>    uv run mypy src
+  <lint>         uv run ruff check . && uv run ruff format --check .
+  <build>        uv build
 ```
 
 Run without asking: reads, read-only diagnostics, any command above, start/restart dev server.
@@ -246,7 +256,7 @@ add, upgrade, or remove a dependency without approval
 rewrite git history
 write to AGENTS.md
 set Status: frozen
-change a finding's state
+change a finding's state, unless the human's prompt names the finding and the new state
 edit a gate
 touch production data or non-local environments
 ```

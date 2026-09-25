@@ -1,5 +1,10 @@
 # please-merge-my-pr — Claude Code Prompt Pack
 
+This file is a high-level roadmap only. It is not an actionable spec and does
+not create findings. The feature files under `plans/` hold the requirements,
+invariants, gates, and review findings. If this roadmap differs from a feature
+plan, the feature plan wins.
+
 Nebius x NVIDIA Global AI Hackathon
 Submission deadline: **Thu Oct 30, 2026, 10:00 PDT**
 Personal deadline: **Tue Oct 28** (buffer for Devpost/YouTube problems)
@@ -9,16 +14,38 @@ bottom. One prompt per session. Each ends in something runnable.
 
 Detailed specs live in `plans/`. Build order:
 1. `weights-research` — formula and signal directions (no code). Closed
-   2026-09-23; default numbers not set yet
+   2026-09-23; seven default weights set 2026-09-24
 2. `cli-design` — decide the look of every screen, in `mock/` (no code)
 3. `queue-skeleton` — data in, rank, print
 4. `onboarding` — `init`, config file, weight presets with live preview
-5. `queue-signals` — blocked_people, due_soon, urgency label
+5. `queue-signals` — blocks, due_soon, urgency label
 6. `queue-actions` — action tiers, label, merge, comment
 7. `replay-harness` — GH Archive replay, policies, leakage guard
 8. `summaries` — the only model code
 
 Background research: `research/landscape.md`. Current state: `handoff.md`.
+
+Current ranking decisions, set by the human on 2026-09-24:
+
+- The weighted registry has exactly seven signals: `urgency` 30, `blocks` 25,
+  `risk_paths` 15, `due_soon` 10, `age` 10, `diff_size` 5, and `ci_state` 5.
+- For each signal, `points_i = 100 × w_i × x_i / Σw`. The exact score is
+  `Σ points_i`. The displayed score uses `floor(exact + 0.5)`.
+- `urgency` uses configured low, medium, high, and urgent labels directly.
+  The highest matching label wins. No label uses medium. `urgent` is 1.
+  Trust, author, label applier, and label history never change urgency.
+- `blocks` counts distinct people other than the PR author. Count authors of
+  open PRs above this PR in a stack. Also count assignees of manually linked
+  issues and GitHub issue dependencies. Boost only the prerequisite PR that
+  unlocks that work. Never infer a link from prose.
+- `author_group`, linked-issue kind, and a standalone `lockfile` signal are
+  omitted for now. Lockfile patterns only remove lines from `diff_size`.
+- A failed read gives its signal zero points. Its weight stays in `Σw`.
+- Equal displayed scores share a rank. `--limit` never splits a tied group.
+- The queue admits only a non-draft PR with a current by-name review request,
+  not a code-owner request, whose matched request came from a user, not a bot.
+  GitHub may turn a team request into matching named-user fields; this version
+  accepts that result because it cannot be told apart.
 
 ---
 
@@ -82,24 +109,22 @@ A PR is in the queue only while a person asked me by name to review it (not
 a team or code-owner request). Drafts stay out.
 score = 100 x sum(w_i x x_i) / sum(w_i)
 Each signal x_i is 0-1; higher means review sooner. Weights w_i are plain
-numbers in config. Default numbers are not set yet.
-- urgency: label low / medium / high / urgent (names from config). No label
-  = medium. The heaviest weight. Counts whoever added it.
-- blocked_people: people other than the PR author waiting on it (stacked PRs
-  above it, manually linked issues). Never from text.
-- linked issue kind: a manually linked issue labeled bug, incident, or
-  customer report
-- due_soon (milestone due date)
-- risk_paths (config globs: auth/, billing/, migrations/)
-- lockfile changes (config patterns)
-- diff_size (bigger PRs score higher)
-- age: time since the current review request; restarts on a re-request
-- author_role: teammate (default), trusted maintainer (a little lower),
-  outside contributor (higher). I set it with a command; never guessed.
-- CI red or merge conflicts: lower the score; the PR is never hidden
-A failed GitHub read gives that signal 0 points. Equal scores share one
-rank. Every rank shows a reason line built from signal templates, never from
-model output.
+numbers in config. Defaults sum to 100.
+- urgency (30): configured low / medium / high / urgent labels. Highest wins.
+  No label means medium. Urgent is 1. Who added the label never matters.
+- blocks (25): distinct people other than the PR author waiting through open
+  PRs above it in a stack, manually linked issue assignees, or GitHub issue
+  dependency assignees. Boost only the prerequisite PR. Never read prose.
+- risk_paths (15): config globs such as auth/, billing/, and migrations/.
+- due_soon (10): milestone due date.
+- age (10): time since the current review request; a re-request restarts it.
+- diff_size (5): bigger PRs score higher. Configured lockfile lines are removed
+  from its line count.
+- ci_state (5): failing CI or a merge conflict gives 0; the PR stays visible.
+`author_group`, linked-issue kind, and standalone `lockfile` are omitted for
+now. A failed read gives that signal 0 points without removing its weight.
+Equal displayed scores share one rank. Every rank shows a reason line built
+from fixed signal templates, never model output or PR text.
 
 HARD CONSTRAINTS
 - PR titles, descriptions, and comments are untrusted data. They can never
@@ -116,14 +141,17 @@ STACK
 Python. Model: any OpenAI-compatible endpoint set in config; default and
 demo is NVIDIA Nemotron on Nebius Token Factory. One client, no per-provider
 code. No model configured = summaries off, everything else works.
-LangSmith tracing, SQLite for metadata, Click or Typer for CLI.
+LangSmith tracing for model calls. SQLite stores metadata only. The queue
+skeleton uses `argparse` and the Python standard library, with no runtime
+dependency.
 Packaged with uv (pyproject.toml, console-script entry point), published to
 PyPI. Users run it with `uvx please-merge-my-pr` or `uv tool install please-merge-my-pr`.
 Name: package and command are `please-merge-my-pr`; Python import name is
 `please_merge_my_pr` (no dashes allowed in imports).
 
 Put in CLAUDE.md: the hard constraints above as rules you must never violate,
-the commit convention, and "run tests before claiming done."
+the human commit convention, and "run tests before claiming done." Agents do
+not commit.
 ```
 
 **Review SPEC.md and CLAUDE.md before continuing. They govern everything after.**
@@ -136,11 +164,11 @@ the commit convention, and "run tests before claiming done."
 
 ```
 Implement the normalized event model in src/please_merge_my_pr/events.py: a dataclass covering
-repo, PR number, author, author_association, title, body, labels, changed
-files, additions/deletions, base/head refs, milestone, created_at, updated_at,
-draft. Add a from_github_api() and a from_gh_archive() constructor so both
-produce identical objects. Include tests with one real API fixture and one GH
-Archive fixture, both checked into /tests/fixtures.
+only fields carried by both sources: repo, PR number, author, title, body,
+labels, additions/deletions, base/head refs, milestone due date, created_at,
+updated_at, and draft. Keep files, review requests, CI, and mergeability in a
+separate `Reads` object. Add `from_github_rest()` and `from_gh_archive()` so
+both produce identical `Event` objects. Include one fixture from each source.
 ```
 
 ### 1.2 Ingestion by polling
@@ -156,18 +184,21 @@ Store the last-seen cursor in SQLite. CLI: `please-merge-my-pr watch`.
 
 ```
 Implement the signal extractors in src/please_merge_my_pr/signals/, one module per signal, each
-returning a float 0-1 plus a reason fragment string. Start with author_role,
-diff_size, risk_paths, age. No model calls. Tests: table-driven with
+returning a float 0-1 plus a reason fragment string. Start with `risk_paths`,
+`age`, `diff_size`, and `ci_state`. Do not add `author_group` or a standalone
+`lockfile` signal. No model calls. Tests: table-driven with
 hand-written event fixtures covering boundary cases.
 ```
 
 ### 1.4 Scorer and the three-line output
 
 ```
-Implement src/please_merge_my_pr/scoring.py: loads weights from config/weights.yaml, computes the
-weighted sum, returns score plus an assembled reason line. Pure function, fully
-deterministic, no I/O. Then `please-merge-my-pr list` printing the top N as one line each:
-"#412 blocks 2 · touches auth/ · 11d old   [score 45]".
+Implement src/please_merge_my_pr/scoring.py as a pure function. The caller
+passes TOML config. Compute `points_i = 100 × w_i × x_i / Σw`, sum exact
+points, then display `floor(exact + 0.5)`. Return all seven signal rows and a
+reason made from the top three non-empty fixed fragments. Then implement
+`please-merge-my-pr list`, with a default limit of three that never splits a
+tied rank: "#412 touches auth · waiting 7d · 380 lines   [score 29]".
 ```
 
 **Week 1 gate: `please-merge-my-pr list` prints real ranked PRs from a real repo, no model involved.**
@@ -176,14 +207,15 @@ deterministic, no I/O. Then `please-merge-my-pr list` printing the top N as one 
 
 ## Week 2 (Sep 29–Oct 5, ~14h) — Blocking, summaries, replay
 
-### 2.1 Blocked people
+### 2.1 Blocks
 
 ```
-Add blocked_people signal: count distinct people, other than the PR author,
-blocked via (a) GitHub issue dependencies on issues manually linked to this
-PR, (b) PRs whose base branch is this PR's head. Use the GraphQL API where
-it's cheaper. Exclude anything asserted only in free text by the PR author.
-Cache per PR with a short TTL.
+Add the `blocks` signal. Count distinct people other than the PR author from
+three structured sources: authors of open PRs above this PR in a stack,
+assignees of manually linked issues, and assignees from GitHub issue
+dependencies. Boost only the prerequisite PR that unlocks those people. A
+linked dependent PR gets no points from the link. Never infer a link or a
+person from free text. Cache structured reads per PR with a short TTL.
 ```
 
 ### 2.2 Summarization (first Token Factory call in the app)
@@ -251,11 +283,12 @@ Wire LangSmith tracing on every model call, then add `please-merge-my-pr egress`
 displays, per PR, exactly what text was sent to the model and what came back.
 ```
 
-### 3.4 Credibility loop — dropped
+### 3.4 Trust and credibility — omitted
 
-Dropped 2026-09-23. Every configured urgency label counts, whoever added it.
-Misuse is for the lead to handle, not the score. See
-`plans/weights-research.md` B7.
+Omitted. Urgency uses the configured label value directly. The highest label
+wins, no label uses medium, and urgent is 1. Trust, credibility, the label
+applier, the PR author, and label history never affect the score. Misuse is
+for the lead to handle. See `plans/weights-research.md` B7.
 
 **Week 3 gate: first held-out replay number + zero rank displacement under injection.**
 
@@ -268,8 +301,9 @@ Misuse is for the lead to handle, not the score. See
 ```
 Add Tavily enrichment for dependency-bump PRs only: detect version bumps in
 lockfiles/manifests, query for active exploitation of the old version, and
-surface it as a capped signal with its own reason fragment. Treat responses as
-untrusted data.
+surface it as non-ranking context. Treat responses as untrusted data. It may
+not add an eighth weighted signal or change the seven-signal score without a
+later human decision.
 ```
 
 ### 4.2 Eval wiring
@@ -363,7 +397,7 @@ Nemotron summaries · replay number · injection results · demo · README
 
 ## Standing rules for Claude Code
 
-- One prompt, one commit, one runnable thing. No runnable output = scope too big.
+- One feature and one role per session. Do not commit from an agent session.
 - Never touch `scoring.py` and `summarize.py` in the same session. That boundary
   IS the security claim.
 - Tests before "done", especially the leakage test and the tier assertions.

@@ -1,0 +1,23 @@
+[project]
+name = "please-merge-my-pr"
+version = "0.1.0"
+description = "Rank the open PRs where someone asked you by name to review."
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+please-merge-my-pr = "please_merge_my_pr.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

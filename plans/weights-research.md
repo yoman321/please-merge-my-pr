@@ -1,15 +1,17 @@
-<!-- role: Plan | model: claude-opus-5-5 | base: 7565d0375cb1a70ce771aea854bf06d4e16a74d4 | date: 2026-09-23 -->
-Status: draft
+<!-- role: Grade the plan | model: gpt-5 | base: 569eee1461ed51a4b4d639c61ee7ed1ae77bee3c | date: 2026-09-24 -->
+Status: reviewed
 Phases: 5
 
 # Weights research
 
 Step 1 of the build order. Research only: no product code.
 
-## Closed
+## Current state
 
-Closed by the human on 2026-09-23. The research ran in a chat session, not
-through phases 1–5. `research/weights.md` was not written.
+The human stopped the research session on 2026-09-23 after making the
+direction calls below. The research ran in chat, not through phases 1–5.
+`research/weights.md` was not written, so this plan's done conditions remain
+unmet.
 
 Decided in that session, each marked below as changed or kept by the human
 on 2026-09-23:
@@ -25,15 +27,18 @@ on 2026-09-23:
 - Kept after the review-cost evidence: bigger PRs rank higher (B1), the
   weighted sum (B11, formula 13), and overlapping signals.
 
-Not done:
+Still not done in this plan:
 
-- No default weights, curves, caps, horizons, or rounding rule were set.
-  `queue-skeleton` phase 3 cannot be built from this plan without them.
+- This plan has no integrated defaults, curves, caps, horizons, or rounding
+  rule. On 2026-09-24, the human picked provisional weights, two caps, and
+  round-half-up in `plans/queue-skeleton.md`. That later choice also dropped
+  the `author_group` and standalone `lockfile` signals for now.
 - No source table, worked examples, or sensitivity table.
-- "Done when" is not met. The human closed the plan anyway.
-- Suggested in chat, not decided: keep the weights adding up to 100, so a
-  weight equals its most possible points; round only the final score.
-- Open questions 5–9.
+- The plan body still describes the dropped signals and does not yet make
+  `plans/queue-skeleton.md` or another file the one source of truth.
+- "Done when" is not met.
+- Open questions 5–9 remain unresolved unless a later human decision below
+  says otherwise.
 
 ## Goal
 
@@ -135,6 +140,10 @@ What the research must respect. A proposal that breaks one is rejected.
   documents `ReviewRequest.asCodeOwner` and current review requests.
 - GitHub's [REST review-request reference](https://docs.github.com/en/rest/pulls/review-requests)
   says a submitted review removes the person from requested reviewers.
+- GitHub's [pull-request review reference](https://docs.github.com/en/pull-requests/reference/pull-request-reviews)
+  says team review assignment can request named team members and remove the
+  team. A current named request alone therefore does not prove a direct
+  manual request.
 - GitHub's [issue event reference](https://docs.github.com/en/rest/using-the-rest-api/issue-event-types)
   documents request actors, requesters, reviewers, and timestamps.
 - GitHub's [stack API reference](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests-apis-and-webhooks)
@@ -157,8 +166,8 @@ What the research must respect. A proposal that breaks one is rejected.
   trial reduced mean resolution time by about 60 percent for the studied
   overdue PRs. This is evidence for later replay, not proof of these weights.
 - A [controlled change-decomposition study](https://pmc.ncbi.nlm.nih.gov/articles/PMC7924728/)
-  treats large changes as harder review work. This does not overturn B1. It
-  means phase 4 must state that B1 trades queue urgency against review cost.
+  compares tangled changes with split changes. It does not compare large
+  changes with small ones, so it supplies no evidence for B1.
 
 ## Research checked in chat on 2026-09-23
 
@@ -462,7 +471,11 @@ For each signal, phase 2 must also specify:
 
 ## Plan review
 
-- [open] high — plans/queue-skeleton.md:81 — its `Event` and ingestion plan lack current review requests, `asCodeOwner`, request events, linked issues, stacks, and unavailable-data state, so it cannot implement W8 or the retained signals — revise that plan after the source audit and before freezing it
-- [open] high — plans/queue-skeleton.md:72 — its total-order invariant makes equal-score PRs appear ordered, which breaks W12's shared-rank rule — keep only a stable display order inside each tied rank group
+- [open] high — plans/weights-research.md:52 — every phase writes `research/weights.md`, but AGENTS.md gives no role permission to write that file, so no allowed session can finish this plan — move the research result into this plan or add a human-defined research role before freezing
+- [open] high — plans/weights-research.md:32 — the human later dropped `author_group` and standalone `lockfile` and picked seven weights in `queue-skeleton`, but this plan still requires both dropped signals and contains none of those defaults — revise the retained-signal list and make one file the source of truth
+- [open] high — plans/weights-research.md:90 — `ReviewRequest.asCodeOwner == false` plus a user timeline event does not prove a manual by-name request because GitHub team review assignment can replace a team request with requests for named members — name a field that distinguishes this case or change W8's team-request rule
+- [open] high — plans/weights-research.md:465 — the plan says linked-issue assignees count as waiting, then says they usually do not represent waiters; this leaves the `blocks` signal without one meaning — the human must choose issue assignees, issue dependencies, or no linked-issue people
 - [open] high — plans/queue-signals.md:31 — its trust-times-credibility urgency rule contradicts B7, where every configured urgency label counts directly — revise that plan before freezing it
+- [open] med — plans/weights-research.md:100 — W10 makes failed reads and true absence score the same but leaves failure display undecided, so `why` cannot meet W3's complete trace without a rule — decide that `why` shows unavailable status or explicitly accept hiding the failure
+- [open] med — plans/weights-research.md:350 — the daily reminder is the only stated answer to accepted starvation, but no owner plan, recipient source, or outbound approval rule is named — assign it to a later plan with those rules or remove it from this plan's decision
 - [open] med — plans/onboarding.md:37 — it says weights load only from user config while W7 still permits a later default-branch team file — the human must choose user-only or define team-file precedence before freezing onboarding

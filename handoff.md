@@ -1,18 +1,21 @@
 # Handoff
-<!-- role: Plan | model: claude-opus-5-5 | base: 7565d0375cb1a70ce771aea854bf06d4e16a74d4 | date: 2026-09-23 -->
+<!-- role: Review the build | model: claude-opus-5-5 | base: 569eee1461ed51a4b4d639c61ee7ed1ae77bee3c | date: 2026-09-25 -->
 
-Feature:  weights-research        Plan: plans/weights-research.md    Status: draft
-Phase:    0 of 5 — closed by the human; phases 1–5 were not run as written
+Feature:  queue-skeleton          Plan: plans/queue-skeleton.md      Status: frozen
+Phase:    7 of 7 — Watch (all phases built; build-review fixes re-reviewed)
 
-State:    Research ran in chat. The human decided the signal directions and closed the plan
-          (see its § Closed). No default weights, curves, caps, or rounding rule were set, and
-          `research/weights.md` was not written. PLAN.md now describes the new ranking.
-Next:     Human answers open questions 5–9 in plans/weights-research.md and sets its final Status.
-Blocked:  `queue-skeleton` phase 3 needs default weight numbers and curves; none exist yet.
-          `queue-skeleton`, `onboarding`, and `queue-signals` still conflict with this plan (its
-          § Plan review and open questions 2–4). Each needs its own Plan session.
-          `research/landscape.md` still claims "trust-weighted urgency with a learned track record";
-          B7 dropped that. PLAN.md 4.1 (Tavily) adds a signal from web text; W11 forbids that.
-Gates:    0/0. Failing: none. A research plan has no gates.
-Verified: git diff --check → pass. grep of the plan for bot / four groups / drift → only closed or
-          unrun text remains. grep of PLAN.md for credibility / trust / smaller → none stale left.
+State:    done. Second build review written to `plans/queue-skeleton.md` § "## Build review".
+          Both accepted fixes (redirects refused in `github/http.py`, https-only `github.api_url`
+          in `config.py`) are in place. 5 new findings are [open]: 2 med, 3 low. Decided findings kept as they were.
+          Session paused here by the human. Still to do: the Week 1 manual `list` run on a real repo
+          (human picks the repo, decision 8). The auth.py finding's fix must read `gh auth token --help`
+          first; `gh` is not installed on this machine.
+Next:     Human decides the state of each [open] finding in § "## Build review".
+Blocked:  the 5 [open] findings wait on the human's decision.
+Gates:    212/212 pass. Failing: none.
+Verified: `uv run pytest -q` → 212 passed;
+          `uv run mypy src` → Success: no issues found in 27 source files;
+          `uv run ruff check . && uv run ruff format --check .` → All checks passed; 49 files already formatted;
+          `uv build` (to scratch dir) → built sdist and wheel;
+          probe `list --demo` with config `api_url = "http://ghe.local/api/v3"` → ValueError traceback, exit 1;
+          probe `list --demo --config <missing file>` → exit 0 on defaults.
