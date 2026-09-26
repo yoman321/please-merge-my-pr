@@ -5,15 +5,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from please_merge_my_pr.scoring import Row
+from please_merge_my_pr.text import wrapped
 
 
 def list_screen(
     header: str, items: Iterable[tuple[int, str, int]], footer: str | None = None
 ) -> str:
     lines = [header]
-    lines.extend(
-        f"#{number} {reason}   [score {score}]" for number, reason, score in items
-    )
+    for number, reason, score in items:
+        lines.extend(wrapped(f"#{number} {reason}   [score {score}]"))
     if footer:
         lines.append(footer)
     return "\n".join(lines) + "\n"
@@ -28,9 +28,10 @@ def why_screen(
     for row in rows:
         suffix = "" if row.status == "ok" else f" [{row.status}]"
         fragment = f" · {row.fragment}" if row.fragment else ""
-        lines.append(
-            f"{row.name}: value {row.value:g}, weight {row.weight:g}, "
-            f"points {row.points:g}, off {row.off:g}{fragment}{suffix}"
+        lines.extend(
+            wrapped(
+                f"{row.name}: value {row.value:g}, weight {row.weight:g}, points {row.points:g}, off {row.off:g}{fragment}{suffix}"
+            )
         )
         points += row.points
         off += row.off
@@ -46,11 +47,20 @@ def why_screen(
 
 
 def show_screen(title: str, reason: str, score: int) -> str:
-    return f"{title}\n{reason}   [score {score}]\nsummary: not enabled\n"
+    return (
+        "\n".join(
+            [
+                *wrapped(title),
+                *wrapped(f"{reason}   [score {score}]"),
+                "summary: not enabled",
+            ]
+        )
+        + "\n"
+    )
 
 
 def watch_screen(items: Iterable[tuple[str, int, str, int]]) -> str:
-    return "".join(
-        f"+ {repo}#{number} {reason}   [score {score}]\n"
-        for repo, number, reason, score in items
-    )
+    lines: list[str] = []
+    for repo, number, reason, score in items:
+        lines.extend(wrapped(f"+ {repo}#{number} {reason}   [score {score}]"))
+    return "\n".join(lines) + ("\n" if lines else "")

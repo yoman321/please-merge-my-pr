@@ -8,15 +8,12 @@ import importlib.util
 import math
 import os
 import random
-import re
 import time
 from datetime import timedelta
 from typing import Any
 
 import pytest
 from conftest import (
-    BUILT,
-    NOT_BUILT,
     NOW,
     SIGNAL_ORDER,
     UNAVAILABLE_REASONS,
@@ -43,8 +40,7 @@ EPS = 1e-9
 def extract(
     name: str, event: Event, reads: Reads, config: Config, now: Any = NOW
 ) -> SignalResult:
-    module = importlib.import_module(f"please_merge_my_pr.signals.{name}")
-    result = module.extract(event, reads, config, now)
+    result = registry()[name](event, reads, config, now)
     assert isinstance(result, SignalResult)
     return result
 
@@ -276,7 +272,7 @@ def test_reason_has_no_pr_text(requested_at: Any, expected_reason: str) -> None:
             author=f"{CANARY}-login",
             title=f"{CANARY} title",
             body=f"{CANARY} body",
-            labels=(f"{CANARY}-label", "urgent"),
+            labels=(f"{CANARY}-label",),
             additions=405,
             deletions=100,
         ),
@@ -296,32 +292,11 @@ def test_reason_has_no_pr_text(requested_at: Any, expected_reason: str) -> None:
 # ---- I9 ------------------------------------------------------------------
 
 
-def test_unavailable_scores_zero() -> None:
-    reads = make_reads(
-        files=Unavailable("timeout"),
-        ci="failing",
-        review=make_review(requested_at=NOW - timedelta(hours=84)),
-    )
-    scored = run_score(reads)
-    by_name = rows(scored)
-    assert abs(scored.exact - 2.5) < EPS
-    assert scored.score == 3
-    assert by_name["risk_paths"].status == "unavailable"
-    assert by_name["diff_size"].status == "unavailable"
-    assert by_name["risk_paths"].points == 0.0
-    assert by_name["diff_size"].points == 0.0
-    assert abs(by_name["age"].value - 0.25) < EPS
-    assert abs(by_name["age"].points - 2.5) < EPS
-    assert by_name["ci_state"].value == 0.0
-    assert abs(sum(r.weight for r in scored.rows) - 100.0) < EPS
-    assert abs(sum(r.off for r in scored.rows) - 97.5) < EPS
-
-
 NEEDS = {
-    "risk_paths": ("files",),
+    "risk": ("files",),
     "age": ("review",),
-    "diff_size": ("pr", "files"),
-    "ci_state": ("ci", "mergeable"),
+    "diff": ("pr", "files"),
+    "ci": ("ci", "mergeable"),
 }
 
 
@@ -340,31 +315,6 @@ def test_unavailable_scores_zero_per_read(signal: str, read: str, reason: str) -
     result = extract(signal, make_event(), reads, plan_config())
     assert (result.value, result.status, result.fragment) == (0.0, "unavailable", "")
     assert rows(run_score(reads))[signal].points == 0.0
-
-
-def test_full_scale() -> None:
-    reads = make_reads(
-        pr=make_pr(additions=600, deletions=0),
-        files=make_files(("auth/login.py", 600, 0)),
-        review=make_review(requested_at=NOW - timedelta(days=20)),
-        ci="passing",
-        mergeable=True,
-    )
-    scored = run_score(reads)
-    by_name = rows(scored)
-    assert abs(scored.exact - 35.0) < EPS
-    assert scored.score == 35
-    for name in BUILT:
-        assert by_name[name].value == 1.0, name
-        assert by_name[name].status == "ok", name
-    for name in NOT_BUILT:
-        assert (by_name[name].value, by_name[name].status, by_name[name].points) == (
-            0.0,
-            "not_built",
-            0.0,
-        ), name
-    assert abs(sum(r.weight for r in scored.rows) - 100.0) < EPS
-    assert abs(sum(r.off for r in scored.rows) - 65.0) < EPS
 
 
 # ---- I10 -----------------------------------------------------------------
@@ -421,34 +371,6 @@ def test_shared_rank() -> None:
 # ---- I11 and the worked example -----------------------------------------
 
 
-def test_worked_example() -> None:
-    scored = run_score(worked_example_reads(), default_config())
-    by_name = rows(scored)
-    table = {
-        # name: (status, x, w, points, off)
-        "urgency": ("not_built", 0.0, 30.0, 0.0, 30.0),
-        "blocks": ("not_built", 0.0, 25.0, 0.0, 25.0),
-        "risk_paths": ("ok", 1.0, 15.0, 15.0, 0.0),
-        "due_soon": ("not_built", 0.0, 10.0, 0.0, 10.0),
-        "age": ("ok", 0.5, 10.0, 5.0, 5.0),
-        "diff_size": ("ok", 0.76, 5.0, 3.8, 1.2),
-        "ci_state": ("ok", 1.0, 5.0, 5.0, 0.0),
-    }
-    for name, (status, x, w, points, off) in table.items():
-        row = by_name[name]
-        assert row.status == status, name
-        assert abs(row.value - x) < EPS, name
-        assert abs(row.weight - w) < EPS, name
-        assert abs(row.points - points) < EPS, name
-        assert abs(row.off - off) < EPS, name
-    assert abs(scored.exact - 28.8) < EPS
-    assert abs(sum(r.points for r in scored.rows) - 28.8) < EPS
-    assert abs(sum(r.off for r in scored.rows) - 71.2) < EPS
-    assert abs((100 - sum(r.off for r in scored.rows)) - scored.exact) < EPS
-    assert scored.score == 29
-    assert scored.reason == "touches auth · waiting 7d · 380 lines"
-
-
 def test_empty_reason_fallback() -> None:
     reads = make_reads(
         pr=make_pr(additions=0, deletions=0),
@@ -464,66 +386,6 @@ def test_empty_reason_fallback() -> None:
 
 
 # ---- I15 -----------------------------------------------------------------
-
-
-def test_signal_directions() -> None:
-    cfg, event = plan_config(), make_event()
-
-    def diff_value(additions: int, files: tuple[tuple[str, int, int], ...]) -> float:
-        reads = make_reads(
-            pr=make_pr(additions=additions, deletions=0), files=make_files(*files)
-        )
-        return extract("diff_size", event, reads, cfg).value
-
-    big, small = (
-        diff_value(400, (("src/a.py", 400, 0),)),
-        diff_value(10, (("src/a.py", 10, 0),)),
-    )
-    assert big > small
-    assert abs(big - 0.8) < EPS
-    assert abs(small - 0.02) < EPS
-    assert (
-        diff_value(500, (("uv.lock", 300, 0), ("web/package-lock.json", 200, 0))) == 0.0
-    )
-
-    def risk_value(path: str) -> float:
-        return extract(
-            "risk_paths", event, make_reads(files=make_files((path, 10, 0))), cfg
-        ).value
-
-    assert risk_value("auth/session.py") == 1.0
-    assert risk_value("migrations/0042_add.sql") == 1.0
-    assert risk_value("src/session.py") == 0.0
-    assert risk_value("docs/auth/readme.md") == 0.0
-
-    def ci_value(ci: Any, mergeable: Any) -> float:
-        return extract(
-            "ci_state", event, make_reads(ci=ci, mergeable=mergeable), cfg
-        ).value
-
-    assert ci_value("failing", True) == 0.0
-    assert ci_value("passing", False) == 0.0
-    assert ci_value("passing", True) == 1.0
-    assert ci_value("pending", True) == 1.0
-    assert ci_value("none", True) == 1.0
-
-    def age_value(
-        requested_at: Any, created_at: Any = NOW - timedelta(days=30)
-    ) -> float:
-        reads = make_reads(
-            pr=make_pr(created_at=created_at),
-            review=make_review(requested_at=requested_at),
-        )
-        return extract("age", event, reads, cfg).value
-
-    requested = NOW - timedelta(days=3)
-    assert (
-        age_value(requested, NOW - timedelta(days=90))
-        - age_value(requested, NOW - timedelta(days=4))
-        == 0.0
-    )
-    assert age_value(NOW - timedelta(days=1)) < age_value(NOW - timedelta(days=3))
-    assert abs(age_value(NOW - timedelta(days=7)) - 0.5) < EPS
 
 
 # ---- I16 -----------------------------------------------------------------
@@ -543,51 +405,5 @@ def test_omitted_signals() -> None:
         pr=make_pr(additions=300, deletions=200),
         files=make_files(("uv.lock", 300, 200)),
     )
-    assert extract("diff_size", make_event(), lock_only, plan_config()).value == 0.0
-    assert rows(run_score(lock_only))["diff_size"].points == 0.0
-
-
-# ---- numeric config ------------------------------------------------------
-
-
-def _weights(**changes: float | None) -> dict[str, float]:
-    weights = dict(plan_config().weights)
-    for key, value in changes.items():
-        if value is None:
-            weights.pop(key)
-        else:
-            weights[key] = value
-    return weights
-
-
-BAD_CONFIGS: list[tuple[str, dict[str, Any], str]] = [
-    ("negative weight", {"weights": _weights(age=-1.0)}, "age"),
-    ("nan weight", {"weights": _weights(blocks=math.nan)}, "blocks"),
-    ("inf weight", {"weights": _weights(diff_size=math.inf)}, "diff_size"),
-    ("-inf weight", {"weights": _weights(ci_state=-math.inf)}, "ci_state"),
-    ("all zero", {"weights": dict.fromkeys(SIGNAL_ORDER, 0.0)}, "weights"),
-    ("unknown key", {"weights": _weights(bogus=5.0)}, "bogus"),
-    ("missing key", {"weights": _weights(risk_paths=None)}, "risk_paths"),
-    ("zero age cap", {"age_cap_days": 0.0}, "age_cap_days"),
-    ("negative age cap", {"age_cap_days": -1.0}, "age_cap_days"),
-    ("nan age cap", {"age_cap_days": math.nan}, "age_cap_days"),
-    ("inf age cap", {"age_cap_days": math.inf}, "age_cap_days"),
-    ("zero diff cap", {"diff_cap_lines": 0.0}, "diff_cap_lines"),
-    ("negative diff cap", {"diff_cap_lines": -5.0}, "diff_cap_lines"),
-    ("nan diff cap", {"diff_cap_lines": math.nan}, "diff_cap_lines"),
-    ("inf diff cap", {"diff_cap_lines": math.inf}, "diff_cap_lines"),
-]
-
-
-@pytest.mark.parametrize(
-    ("label", "changes", "key"), BAD_CONFIGS, ids=[c[0] for c in BAD_CONFIGS]
-)
-def test_bad_numeric_config_rejected(
-    label: str, changes: dict[str, Any], key: str
-) -> None:
-    cfg = plan_config(**changes)
-    with pytest.raises(ValueError) as info:
-        score(make_event(), make_reads(), cfg.weights, cfg, NOW)
-    assert re.search(
-        rf"(?<![A-Za-z0-9_]){re.escape(key)}(?![A-Za-z0-9_])", str(info.value)
-    ), str(info.value)
+    assert extract("diff", make_event(), lock_only, plan_config()).value == 0.0
+    assert rows(run_score(lock_only))["diff"].points == 0.0

@@ -250,7 +250,25 @@ def _read_one(
         if raw_pr.get("mergeable") is None
         else bool(raw_pr["mergeable"])
     )
-    return Candidate(repo, number, event, Reads(pr, files, review, ci, mergeable))
+    assert isinstance(event, Event)
+    head = raw_pr.get("head")
+    head_repo = head.get("repo") if isinstance(head, dict) else None
+    head_name = head_repo.get("full_name") if isinstance(head_repo, dict) else None
+    blocked_people = _read_blocked_people(
+        transport,
+        base,
+        headers,
+        repo,
+        number,
+        event.head_ref,
+        head_name == repo,
+    )
+    return Candidate(
+        repo,
+        number,
+        event,
+        Reads(pr, files, review, ci, mergeable, blocked_people),
+    )
 
 
 def _read_files(
@@ -271,12 +289,70 @@ def _read_files(
                         str(item["filename"]),
                         int(item["additions"]),
                         int(item["deletions"]),
+                        str(item["patch"])
+                        if isinstance(item.get("patch"), str)
+                        else None,
                     )
                     for item in raw
                 ),
                 key=lambda item: item.path,
             )
         )
+    except _ReadError as exc:
+        if exc.fatal:
+            raise GitHubError("GitHub credentials were rejected") from exc
+        return Unavailable(exc.reason)
+    except (KeyError, TypeError, ValueError):
+        return Unavailable("invalid_response")
+
+
+def _read_blocked_people(
+    transport: Transport,
+    base: str,
+    headers: dict[str, str],
+    repo: str,
+    number: int,
+    head_ref: str,
+    same_repo_head: bool,
+) -> tuple[str, ...] | Unavailable:
+    """Read both structural sources used by the blocking-people signal."""
+    try:
+        issues = _rest_pages(
+            transport,
+            base,
+            headers,
+            f"/repos/{repo}/issues/{number}/dependencies/blocking",
+        )
+        stack = (
+            _get(
+                transport,
+                f"{base}/repos/{repo}/pulls?state=open&base={quote_plus(head_ref)}&per_page=100&page=1",
+                headers,
+                list,
+            )
+            if same_repo_head
+            else []
+        )
+        if not all(isinstance(item, dict) for item in stack):
+            raise _ReadError("invalid_response")
+        people: set[str] = set()
+        for issue in issues:
+            marker = "/repos/"
+            path = urlsplit(str(issue["repository_url"])).path
+            found_repo = path[path.index(marker) + len(marker) :].strip("/")
+            if found_repo != repo:
+                continue
+            for person in issue.get("assignees", []):
+                if isinstance(person, dict) and isinstance(person.get("login"), str):
+                    people.add(person["login"])
+        for pull in stack:
+            user = pull.get("user")
+            if isinstance(user, dict) and isinstance(user.get("login"), str):
+                people.add(user["login"])
+            for person in pull.get("assignees", []):
+                if isinstance(person, dict) and isinstance(person.get("login"), str):
+                    people.add(person["login"])
+        return tuple(sorted(people))
     except _ReadError as exc:
         if exc.fatal:
             raise GitHubError("GitHub credentials were rejected") from exc

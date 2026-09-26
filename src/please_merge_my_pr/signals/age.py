@@ -16,7 +16,8 @@ def extract(event: Event, reads: Reads, config: Config, now: datetime) -> Signal
     requested = reads.review.requested_at
     if requested is None:
         return SignalResult(0.0, "", "absent")
-    hours = max(0.0, (now - requested).total_seconds() / 3600.0)
+    seconds = max(0.0, (now - requested).total_seconds())
+    hours = seconds / 3600.0
     value = min(1.0, hours / (config.age_cap_days * 24.0))
     if value == 0.0:
         return SignalResult(0.0, "", "absent")

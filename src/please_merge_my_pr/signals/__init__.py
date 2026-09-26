@@ -39,9 +39,9 @@ def registry() -> dict[str, Extract]:
     return {
         "urgency": urgency.extract,
         "blocks": blocks.extract,
-        "risk_paths": risk_paths.extract,
+        "risk": risk_paths.extract,
         "due_soon": due_soon.extract,
         "age": age.extract,
-        "diff_size": diff_size.extract,
-        "ci_state": ci_state.extract,
+        "diff": diff_size.extract,
+        "ci": ci_state.extract,
     }

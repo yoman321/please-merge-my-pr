@@ -9,6 +9,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, build_opener
 from urllib.request import Request as UrlRequest
 
+MAX_RESPONSE_READ = 1_048_577
+
 
 @dataclass(frozen=True)
 class Request:
@@ -61,13 +63,13 @@ class UrllibTransport:
                 return Response(
                     status=response.status,
                     headers=dict(response.headers.items()),
-                    body=response.read(),
+                    body=response.read(MAX_RESPONSE_READ),
                 )
         except HTTPError as exc:
             return Response(
                 status=exc.code,
                 headers=dict(exc.headers.items()),
-                body=exc.read(),
+                body=exc.read(MAX_RESPONSE_READ),
             )
         except URLError as exc:
             if isinstance(exc.reason, TimeoutError):

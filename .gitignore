@@ -1,2 +1,5 @@
 # ignore work tree
 .claude
+
+# ignore python
+__pycache__/

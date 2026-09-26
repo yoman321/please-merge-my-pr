@@ -40,18 +40,17 @@ FIXTURES = TESTS_DIR / "fixtures"
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
 API = "https://api.fake-github.test"
 
-# Phase 3: the fixed order of all seven weighted signals.
+# The fixed order of all seven weighted signals, by their canonical
+# names from plans/chat.md C22 and C24.
 SIGNAL_ORDER = (
     "urgency",
     "blocks",
-    "risk_paths",
+    "risk",
     "due_soon",
     "age",
-    "diff_size",
-    "ci_state",
+    "diff",
+    "ci",
 )
-BUILT = ("risk_paths", "age", "diff_size", "ci_state")
-NOT_BUILT = ("urgency", "blocks", "due_soon")
 
 # Phase 2: the fixed set of Unavailable reasons.
 UNAVAILABLE_REASONS = (
@@ -71,11 +70,11 @@ UNAVAILABLE_REASONS = (
 DEFAULT_WEIGHTS = {
     "urgency": 30.0,
     "blocks": 25.0,
-    "risk_paths": 15.0,
+    "risk": 15.0,
     "due_soon": 10.0,
     "age": 10.0,
-    "diff_size": 5.0,
-    "ci_state": 5.0,
+    "diff": 5.0,
+    "ci": 5.0,
 }
 DEFAULT_LOCKFILES = (
     "**/uv.lock",

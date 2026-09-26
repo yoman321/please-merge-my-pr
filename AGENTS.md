@@ -4,11 +4,14 @@ Follow literally. Ambiguous → stop and ask. Never infer intent.
 
 ## 0. Session start
 
-1. Read `AGENTS.md`, `handoff.md`.
-2. Identify your role from the prompt. Not stated → STOP.
-3. Read your role's `reads`. Check `requires`. Unmet → STOP.
-4. Record the current commit sha as `base`.
-5. One role per session. Never take two.
+1. Read `AGENTS.md`, `handoff.md`, `architecture/architecture.md`.
+2. `architecture/architecture.md` missing → create it now, from the code, in the §4 shape. Any role may do this. It counts as inside role.writes. Then continue.
+3. Identify your role from the prompt. Not stated → STOP.
+4. Read your role's `reads`. Check `requires`. Unmet → STOP.
+5. Record the current commit sha as `base`.
+6. One role per session. Never take two.
+
+`architecture/architecture.md` is the map of the repo. Read it before searching the code. Map and code disagree → the code is true. Name the gap in your report.
 
 ## 1. Roles
 
@@ -16,7 +19,7 @@ Follow literally. Ambiguous → stop and ask. Never infer intent.
 ```
 model:    opus-5
 requires: —
-reads:    AGENTS.md, handoff.md, code
+reads:    AGENTS.md, handoff.md, architecture/architecture.md, code
 writes:   plans/<feature>.md § spec
 done:     every invariant stated; phases numbered; Status: draft
 ```
@@ -25,7 +28,7 @@ done:     every invariant stated; phases numbered; Status: draft
 ```
 model:    sol            # must differ from the plan's provenance model
 requires: Status: draft
-reads:    plans/<feature>.md, code
+reads:    plans/<feature>.md, architecture/architecture.md, code
 writes:   plans/<feature>.md plan body + § "## Plan review"
 done:     needed revisions written into the plan; review section replaced whole; Status set to reviewed
 ```
@@ -34,7 +37,7 @@ done:     needed revisions written into the plan; review section replaced whole;
 ```
 model:    opus-5
 requires: Status: frozen
-reads:    plans/<feature>.md
+reads:    plans/<feature>.md, architecture/architecture.md
 writes:   tests only
 done:     every gate run and observed failing for missing behavior
 ```
@@ -43,18 +46,19 @@ done:     every gate run and observed failing for missing behavior
 ```
 model:    sol
 requires: Status: frozen, gates failing
-reads:    plans/<feature>.md, tests
-writes:   code
-done:     every phase built before any test is run; §7 run in full; every failure reported
+reads:    plans/<feature>.md, architecture/architecture.md, tests
+writes:   code, architecture/architecture.md
+done:     every phase built before any test is run; §7 run in full; architecture/architecture.md matches the code on disk; every failure reported
 ```
 
 Build, in this order, every time:
 
 1. **Build all of it.** Every phase of the plan, in order. Do not stop at a phase boundary. Do not run a test yet.
 2. **Test all of it.** Then run the gates and all of §7: `<test-full>`, `<typecheck>`, `<lint>`, `<build>`. Run every one, even after the first failure. Never stop at the first red.
-3. **Report anything wrong.** List every failure: what failed, the command, the pasted output, and which phase or file it points at. Name anything you built that you are unsure of. Name anything in the plan that turned out wrong or missing.
+3. **Update the map.** Edit `architecture/architecture.md` so it describes the repo as it is now. Cover every file, module, route, data flow, and dependency this build added, changed, or removed. Describe what exists on disk, not what the plan hoped for. Do this even when tests failed or you hit a STOP.
+4. **Report anything wrong.** List every failure: what failed, the command, the pasted output, and which phase or file it points at. Name anything you built that you are unsure of. Name anything in the plan that turned out wrong or missing.
 
-Rules for step 3:
+Rules for step 4:
 - Report failures. Never hide, skip, or explain one away.
 - Never relax, skip, or delete a gate to reach green.
 - All of §7 green and nothing unsure → say so plainly in one line. Do not pad it.
@@ -64,10 +68,11 @@ Rules for step 3:
 ```
 model:    opus-5         # must differ from the build's provenance model
 requires: §7 passes
-reads:    plans/<feature>.md, diff vs base recorded by Build
+reads:    plans/<feature>.md, architecture/architecture.md, diff vs base recorded by Build
 writes:   plans/<feature>.md § "## Build review"
-done:     section replaced whole
+done:     section replaced whole; architecture/architecture.md checked against the diff
 ```
+`architecture/architecture.md` out of date or wrong vs the code → one finding per gap. Never fix it yourself.
 
 Rules:
 - Every session rewrites `handoff.md` whole before ending. Never append.
@@ -97,6 +102,7 @@ about to write outside role.writes   → STOP
 AGENTS.md            these rules
 plans/<feature>.md   spec + plan review + build review. One file per feature.
 handoff.md           state, next step. Rewritten whole each session.
+architecture/architecture.md  map of the repo: what is where, what it does. Updated by every Build.
 BACKLOG.md           not started. Out-of-scope findings go under "Found while working".
 README.md            human setup
 docs/gotchas.md      symptom → fix, one line each. Delete entries whose cause is fixed.
@@ -104,7 +110,7 @@ docs/gotchas.md      symptom → fix, one line each. Delete entries whose cause 
 
 ## 4. Formats
 
-Provenance — first line of every write to `plans/<feature>.md` and `handoff.md`:
+Provenance — first line of every write to `plans/<feature>.md`, `handoff.md`, and `architecture/architecture.md`:
 ```
 <!-- role: <role> | model: <model-id> | base: <sha> | date: <YYYY-MM-DD> -->
 ```
@@ -142,6 +148,37 @@ Prompt unclear on which finding or which state → STOP, ask.
 Log each change in handoff.md under State: <file:line> [open] → [new], per human instruction.
 ```
 The Grade role may fix defects directly in the plan body. Its review section lists only issues that remain unresolved.
+
+`architecture/architecture.md` — exact shape:
+```
+# Architecture
+<!-- provenance -->
+
+## Purpose
+<what the repo does and for whom, 2-3 lines>
+
+## Layout
+<directory tree, top two levels; one line per entry: what lives there>
+
+## Modules
+<one block per module: path — what it does — entry points — what it depends on>
+
+## Data flow
+<main paths through the system, one line each: input → step → step → output>
+
+## External
+<services, APIs, databases, env vars the code reads. Names only, never secret values.>
+
+## Features
+<one line per built feature: name — plans/<name>.md — main files it touched>
+```
+Rules:
+```
+Describe what is on disk now. Never plans, wishes, or history.
+Edit only the parts that changed. Keep the rest as is.
+Real names stay exact: paths, functions, routes, env vars.
+No code copied in. Point to file:line instead.
+```
 
 `handoff.md` — exact shape, every session:
 ```
@@ -215,6 +252,7 @@ Before calling any library API: read the lockfile and the installed source, vend
 
 ```
 always                                          → handoff.md, whole, §4 shape
+Build session, any outcome                      → architecture/architecture.md, matches the code on disk
 decision made, or plan deviated from            → handoff.md
 direction, scope, or rules changed              → handoff.md
 setup, commands, routes, env vars changed       → README.md

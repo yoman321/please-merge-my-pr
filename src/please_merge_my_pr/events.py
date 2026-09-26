@@ -77,6 +77,7 @@ class FileChange:
     path: str
     additions: int
     deletions: int
+    patch: str | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,7 @@ class Reads:
     review: ReviewTurn | Unavailable
     ci: CIState | Unavailable
     mergeable: bool | Unavailable
+    blocked_people: tuple[str, ...] | Unavailable = ()
 
 
 def _parse_time(value: Any) -> datetime:
