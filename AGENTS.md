@@ -15,27 +15,20 @@ Follow literally. Ambiguous → stop and ask. Never infer intent.
 
 ## 1. Roles
 
+Flow: **Plan** → `Status: frozen` → **Write the gates** → **Build**.
+
 ### Plan
 ```
-model:    opus-5
+model:    any Claude Opus model (whichever runs this session)
 requires: —
 reads:    AGENTS.md, handoff.md, architecture/architecture.md, code
-writes:   plans/<feature>.md § spec
+writes:   plans/<feature>.md
 done:     every invariant stated; phases numbered; Status: draft
-```
-
-### Grade the plan
-```
-model:    sol            # must differ from the plan's provenance model
-requires: Status: draft
-reads:    plans/<feature>.md, architecture/architecture.md, code
-writes:   plans/<feature>.md plan body + § "## Plan review"
-done:     needed revisions written into the plan; review section replaced whole; Status set to reviewed
 ```
 
 ### Write the gates
 ```
-model:    opus-5
+model:    any Claude Opus model (whichever runs this session)
 requires: Status: frozen
 reads:    plans/<feature>.md, architecture/architecture.md
 writes:   tests only
@@ -44,11 +37,11 @@ done:     every gate run and observed failing for missing behavior
 
 ### Build
 ```
-model:    sol
+model:    any GPT Sol model (whichever runs this session)
 requires: Status: frozen, gates failing
 reads:    plans/<feature>.md, architecture/architecture.md, tests
 writes:   code, architecture/architecture.md
-done:     every phase built before any test is run; §7 run in full; architecture/architecture.md matches the code on disk; every failure reported
+done:     every phase built; §7 run in full; architecture/architecture.md matches the code on disk; every failure reported
 ```
 
 Build, in this order, every time:
@@ -64,22 +57,10 @@ Rules for step 4:
 - All of §7 green and nothing unsure → say so plainly in one line. Do not pad it.
 - Anything still red after 3 attempts with no gate changing state → STOP (§2), write the failures into `handoff.md`, report. Do not push through.
 
-### Review the build
-```
-model:    opus-5         # must differ from the build's provenance model
-requires: §7 passes
-reads:    plans/<feature>.md, architecture/architecture.md, diff vs base recorded by Build
-writes:   plans/<feature>.md § "## Build review"
-done:     section replaced whole; architecture/architecture.md checked against the diff
-```
-`architecture/architecture.md` out of date or wrong vs the code → one finding per gap. Never fix it yourself.
-
 Rules:
 - Every session rewrites `handoff.md` whole before ending. Never append.
 - Write all output to disk before the session ends.
-- Build every phase in order before running any gate or test. Do not stop at phase boundaries.
 - One feature, one active session. Two sessions never write one file.
-- Grading sessions may revise the plan body and replace their own review section. They do not write code or tests.
 
 ## 2. STOP conditions
 
@@ -87,11 +68,10 @@ Stop. Rewrite `handoff.md`. Report. Do not push through.
 
 ```
 plan Status ≠ role requires          → STOP, name the status found
-provenance model == your model       → STOP, do not grade your own output
 3 post-build test attempts, no gate changed state → STOP, name what you tried and observed
 gate is wrong                        → STOP, never edit a gate
 gate passes before work exists       → STOP, report as plan defect
-plan is wrong outside Plan/Grade     → STOP, never work around it
+plan is wrong outside Plan           → STOP, never work around it
 product decision needed              → STOP, state options, do not pick
 about to write outside role.writes   → STOP
 ```
@@ -100,7 +80,7 @@ about to write outside role.writes   → STOP
 
 ```
 AGENTS.md            these rules
-plans/<feature>.md   spec + plan review + build review. One file per feature.
+plans/<feature>.md   spec. One file per feature.
 handoff.md           state, next step. Rewritten whole each session.
 architecture/architecture.md  map of the repo: what is where, what it does. Updated by every Build.
 BACKLOG.md           not started. Out-of-scope findings go under "Found while working".
@@ -118,36 +98,13 @@ Provenance — first line of every write to `plans/<feature>.md`, `handoff.md`, 
 `plans/<feature>.md` header:
 ```
 <!-- provenance -->
-Status: draft | reviewed | frozen
+Status: draft | frozen
 Phases: <n>
 ```
 ```
-draft     Plan is being written. Only Plan and Grade may read or edit it.
-reviewed  A grading session revised the plan and wrote "## Plan review". Findings may remain open.
-frozen    Human resolved every finding and set this. ONLY A HUMAN SETS frozen.
-          Requires zero [open] findings.
+draft     Plan is being written. Only Plan may edit it.
+frozen    Plan approved. Plan is wrong → STOP (§2).
 ```
-
-Finding — one per line, both review sections:
-```
-- [open] high — src/auth/session.ts:42 — refresh races the revoke check, so a revoked token survives one cycle — take the lock before the read
-  [state] [severity] — [file:line] — [why it breaks] — [smallest fix]
-```
-```
-state:     [open] → [accepted] | [rejected]. ONLY A HUMAN DECIDES STATE.
-           An agent may write the change only when the human's prompt names the finding
-           (file:line) and the new state. Any role may make that one edit.
-severity:  high = breaks an invariant | med = breaks under a stated condition | low = cost, clarity, drift
-forbidden: praise, summary of the artifact, changing a finding's state without the human's named instruction, resolving your own
-```
-State change on instruction:
-```
-Change only the [state] token. Leave the rest of the line as is.
-Change only the findings the prompt names. Never "all", never by pattern.
-Prompt unclear on which finding or which state → STOP, ask.
-Log each change in handoff.md under State: <file:line> [open] → [new], per human instruction.
-```
-The Grade role may fix defects directly in the plan body. Its review section lists only issues that remain unresolved.
 
 `architecture/architecture.md` — exact shape:
 ```
@@ -185,7 +142,7 @@ No code copied in. Point to file:line instead.
 # Handoff
 <!-- provenance -->
 
-Feature:  <name>          Plan: plans/<name>.md      Status: <draft|reviewed|frozen>
+Feature:  <name>          Plan: plans/<name>.md      Status: <draft|frozen>
 Phase:    <n> of <m> — <name>
 
 State:    <done / half-done, 2-3 lines>
@@ -198,14 +155,13 @@ Verified: <commands run> → <results>
 ## 5. Commands
 
 ```bash
-
-  <setup>        uv sync
-  <test-fast>    uv run pytest -q -x
-  <test-full>    uv run pytest -q
-  <test-single>  uv run pytest -q <path>::<test>
-  <typecheck>    uv run mypy src
-  <lint>         uv run ruff check . && uv run ruff format --check .
-  <build>        uv build
+<setup>        uv sync
+<test-fast>    uv run pytest -q -x
+<test-full>    uv run pytest -q
+<test-single>  uv run pytest -q <path>::<test>
+<typecheck>    uv run mypy src
+<lint>         uv run ruff check . && uv run ruff format --check .
+<build>        uv build
 ```
 
 Run without asking: reads, read-only diagnostics, any command above, start/restart dev server.
@@ -232,14 +188,13 @@ Done requires ALL of:
 4. <lint>      passes
 5. <build>     passes
 ```
-The Build role completes every planned phase before running step 2 or any other test or gate.
 Run all five. Do not stop at the first failure. Report every failure you found, not just the first one.
-A clean review is not verification. Handing off with a failure: name it, paste the output.
+Handing off with a failure: name it, paste the output.
 
 ## 8. Scope
 
 ```
-No product-direction change without a human decision. Need an assumption → state it, continue.
+No product-direction change without a human decision. Plan ambiguous → stop and ask.
 Smallest change that fully satisfies the task.
 No drive-by renames, unrelated refactors, or reformatting.
 Match surrounding idiom, naming, comment density.
@@ -292,9 +247,6 @@ commit, push, tag, merge, open a pull request
 modify CI config, deploy manifests, release tooling
 add, upgrade, or remove a dependency without approval
 rewrite git history
-write to AGENTS.md
-set Status: frozen
-change a finding's state, unless the human's prompt names the finding and the new state
 edit a gate
 touch production data or non-local environments
 ```

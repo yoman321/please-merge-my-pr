@@ -1,6 +1,7 @@
-<!-- role: state change (human instruction) | model: claude-opus-5-5 | base: 251926649600f0750c78f760549e2c2a5e4f1e37 | date: 2026-09-25 -->
+<!-- role: state change (human instruction) | model: claude-opus-5-5 | base: 3b625c74b6c5118e0126cbdc6cc5febc9113d6a4 | date: 2026-10-05 -->
 Status: frozen
 Phases: 16
+Done: 2026-10-05, per human instruction. Work moves to the next plan. Known leftovers: ruff TRY004 at src/please_merge_my_pr/onboarding.py:150; src/please_merge_my_pr/tools.py needs `ruff format`.
 
 # Chat
 
