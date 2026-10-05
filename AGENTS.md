@@ -23,7 +23,7 @@ model:    any Claude Opus model (whichever runs this session)
 requires: —
 reads:    AGENTS.md, handoff.md, architecture/architecture.md, code
 writes:   plans/<feature>.md
-done:     every invariant stated; phases numbered; Status: draft
+done:     every invariant stated; phases numbered; ## Setup impact stated (none | steps); Status: draft
 ```
 
 ### Write the gates
@@ -211,6 +211,7 @@ Build session, any outcome                      → architecture/architecture.md
 decision made, or plan deviated from            → handoff.md
 direction, scope, or rules changed              → handoff.md
 setup, commands, routes, env vars changed       → README.md
+user setup step added, changed, or removed      → registry in src/please_merge_my_pr/setup_steps.py + README ## Setup (plans/user-init.md)
 >10 min lost, cause non-obvious                 → docs/gotchas.md, one line, symptom → fix
 ```
 
